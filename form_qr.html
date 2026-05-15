@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Entry Details</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f4f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 2.5rem 1rem;
+      color: #1a1a1a;
+    }
+
+    .wrapper { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 1.25rem; }
+
+    .card {
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.12);
+      border-radius: 12px;
+      padding: 1.5rem 1.75rem;
+    }
+
+    h1 { font-size: 18px; font-weight: 500; margin-bottom: 1.5rem; }
+
+    .fields { display: flex; flex-direction: column; gap: 1.25rem; }
+
+    label { display: block; font-size: 13px; color: #666; margin-bottom: 6px; }
+
+    input[type="text"],
+    input[type="number"] {
+      width: 100%;
+      height: 36px;
+      padding: 0 10px;
+      font-size: 14px;
+      border: 0.5px solid rgba(0,0,0,0.2);
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.15s;
+      background: #fff;
+      color: #1a1a1a;
+    }
+    input:hover { border-color: rgba(0,0,0,0.35); }
+    input:focus { border-color: rgba(0,0,0,0.5); box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
+
+    .actions { display: flex; gap: 10px; margin-top: 1.75rem; }
+
+    button {
+      height: 36px;
+      padding: 0 16px;
+      font-size: 14px;
+      border: 0.5px solid rgba(0,0,0,0.2);
+      border-radius: 8px;
+      background: transparent;
+      cursor: pointer;
+      transition: background 0.15s;
+      color: #1a1a1a;
+    }
+    button:hover { background: #f0efeb; }
+    button:active { transform: scale(0.98); }
+    #btn-submit { flex: 1; }
+
+    .error { font-size: 13px; color: #c0392b; margin-top: 1rem; display: none; }
+
+    #qr-section { display: none; text-align: center; }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #999;
+      margin-bottom: 1rem;
+    }
+
+    #qr-code {
+      display: inline-block;
+      padding: 12px;
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.1);
+      border-radius: 8px;
+    }
+
+    #qr-url {
+      margin-top: 1rem;
+      font-size: 11px;
+      color: #bbb;
+      word-break: break-all;
+      text-align: left;
+    }
+
+    #details-view { display: none; }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 10px 0;
+      border-bottom: 0.5px solid rgba(0,0,0,0.07);
+      font-size: 15px;
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-key { color: #999; font-size: 13px; }
+    .detail-val { font-weight: 500; }
+
+    .back-btn {
+      display: inline-block;
+      margin-top: 1.25rem;
+      font-size: 13px;
+      color: #555;
+      border: 0.5px solid rgba(0,0,0,0.2);
+      border-radius: 8px;
+      padding: 6px 14px;
+      cursor: pointer;
+      background: transparent;
+    }
+    .back-btn:hover { background: #f0efeb; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+
+    <!-- FORM VIEW -->
+    <div id="form-view">
+      <div class="card">
+        <h1>Entry details</h1>
+        <div class="fields">
+          <div>
+            <label for="floor">Floor</label>
+            <input type="number" id="floor" placeholder="e.g. 3" min="0" />
+          </div>
+          <div>
+            <label for="mix">Mix</label>
+            <input type="text" id="mix" placeholder="e.g. C25/30" />
+          </div>
+          <div>
+            <label for="weight">Weight (kg)</label>
+            <input type="number" id="weight" placeholder="e.g. 150" min="0" step="0.1" />
+          </div>
+        </div>
+        <div class="actions">
+          <button id="btn-submit" onclick="handleSubmit()">Generate QR code</button>
+          <button onclick="handleClear()">Clear</button>
+        </div>
+        <p class="error" id="error-msg">Please fill in at least one field.</p>
+      </div>
+
+      <div class="card" id="qr-section">
+        <p class="section-label">Scan to view details</p>
+        <div id="qr-code"></div>
+        <p id="qr-url"></p>
+      </div>
+    </div>
+
+    <!-- DETAILS VIEW (shown when page is opened via QR scan) -->
+    <div id="details-view">
+      <div class="card">
+        <h1>Submitted details</h1>
+        <div id="details-rows"></div>
+        <button class="back-btn" onclick="goBack()">← New entry</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.has('floor') || params.has('mix') || params.has('weight')) {
+      document.getElementById('form-view').style.display = 'none';
+      document.getElementById('details-view').style.display = 'block';
+
+      const fields = [
+        { key: 'Floor', param: 'floor', suffix: '' },
+        { key: 'Mix', param: 'mix', suffix: '' },
+        { key: 'Weight', param: 'weight', suffix: ' kg' },
+      ];
+
+      const container = document.getElementById('details-rows');
+      fields.forEach(f => {
+        const val = params.get(f.param);
+        if (val) {
+          const row = document.createElement('div');
+          row.className = 'detail-row';
+          const display = f.param === 'weight'
+            ? parseFloat(val).toLocaleString() + f.suffix
+            : val + f.suffix;
+          row.innerHTML = `<span class="detail-key">${f.key}</span><span class="detail-val">${display}</span>`;
+          container.appendChild(row);
+        }
+      });
+    }
+
+    function handleSubmit() {
+      const floor = document.getElementById('floor').value.trim();
+      const mix = document.getElementById('mix').value.trim();
+      const weight = document.getElementById('weight').value.trim();
+      const errEl = document.getElementById('error-msg');
+
+      if (!floor && !mix && !weight) {
+        errEl.style.display = 'block';
+        return;
+      }
+      errEl.style.display = 'none';
+
+      const p = new URLSearchParams();
+      if (floor) p.set('floor', floor);
+      if (mix) p.set('mix', mix);
+      if (weight) p.set('weight', weight);
+
+      const url = window.location.href.split('?')[0] + '?' + p.toString();
+
+      const qrContainer = document.getElementById('qr-code');
+      qrContainer.innerHTML = '';
+      new QRCode(qrContainer, {
+        text: url,
+        width: 200,
+        height: 200,
+        colorDark: '#000000',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+      });
+
+      document.getElementById('qr-url').textContent = url;
+      document.getElementById('qr-section').style.display = 'block';
+    }
+
+    function handleClear() {
+      ['floor', 'mix', 'weight'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('error-msg').style.display = 'none';
+      document.getElementById('qr-section').style.display = 'none';
+      document.getElementById('qr-code').innerHTML = '';
+      document.getElementById('qr-url').textContent = '';
+    }
+
+    function goBack() {
+      window.location.href = window.location.href.split('?')[0];
+    }
+  </script>
+</body>
+</html>
